@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}СМР-Про · Интеллектуальный поиск{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header class="topbar">
+        <a href="{{ url_for('index') }}" class="brand">СМР-Про</a>
+        <span class="brand-sub">Интеллектуальный поиск расценок</span>
+    </header>
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footbar">
+        <small>Прототип системы интеллектуального поиска · диплом</small>
+    </footer>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+    <h1>Поиск расценок</h1>
+    <p class="lead">
+        Введите запрос на естественном языке — например,
+        <em>«тёплый пол»</em>, <em>«покраска стен»</em> или код расценки.
+    </p>
+
+    <form method="post" action="{{ url_for('search') }}" class="search-form">
+        <input
+            type="text" name="query"
+            placeholder="Что нужно найти?"
+            value="{{ query or '' }}" autofocus required>
+        <button type="submit">Найти</button>
+    </form>
+
+    {% if error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+
+    <div class="examples">
+        <span class="label">Попробуйте:</span>
+        {% for q in ["тёплый пол", "покраска стен", "кровельный пирог", "штукатурка"] %}
+            <form method="post" action="{{ url_for('search') }}" class="inline">
+                <input type="hidden" name="query" value="{{ q }}">
+                <button type="submit" class="link">{{ q }}</button>
+            </form>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

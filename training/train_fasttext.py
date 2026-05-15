@@ -1,0 +1,56 @@
+"""Train a FastText model on the corpus of rascenka names.
+
+This is used in the preprocessing layer for query expansion. FastText is
+preferred over Word2Vec because of subword robustness to OOV and typos.
+"""
+from __future__ import annotations
+
+from typing import List
+
+from common.config import FASTTEXT_MODEL_PATH
+from common.db import all_rascenki, all_transactions
+from common.logging_config import get_logger
+from services.preprocessing.lemmatizer import tokenize
+
+log = get_logger(__name__)
+
+
+def _corpus() -> List[List[str]]:
+    sentences: List[List[str]] = []
+    for r in all_rascenki():
+        sentences.append(tokenize(r["naim"]))
+    for tx in all_transactions():
+        if tx["ptm_naim"]:
+            sentences.append(tokenize(tx["ptm_naim"]))
+    return [s for s in sentences if s]
+
+
+def train(vector_size: int = 100, window: int = 5, min_count: int = 1, epochs: int = 10) -> bool:
+    try:
+        from gensim.models import FastText
+    except ImportError:
+        log.warning("gensim not installed – skipping FastText")
+        return False
+
+    corpus = _corpus()
+    if len(corpus) < 5:
+        log.warning("Corpus too small (%d) – skipping FastText", len(corpus))
+        return False
+
+    log.info("Training FastText on %d sentences", len(corpus))
+    model = FastText(
+        sentences=corpus,
+        vector_size=vector_size,
+        window=window,
+        min_count=min_count,
+        epochs=epochs,
+        workers=1,
+    )
+    FASTTEXT_MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+    model.save(str(FASTTEXT_MODEL_PATH))
+    log.info("Saved FastText to %s", FASTTEXT_MODEL_PATH)
+    return True
+
+
+if __name__ == "__main__":
+    train()

@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block title %}Результаты: {{ query }}{% endblock %}
+
+{% block content %}
+<form method="post" action="{{ url_for('search') }}" class="search-form compact">
+    <input type="text" name="query" value="{{ query }}" autofocus required>
+    <button type="submit">Найти</button>
+</form>
+
+<div class="query-meta">
+    Запрос: <b>«{{ query }}»</b>
+    {% if result.corrected and result.corrected != query %}
+        → исправлено: <i>«{{ result.corrected }}»</i>
+    {% endif %}
+    · тип: <span class="pill">{{ result.query_type }}</span>
+    {% if result.timings_ms %}
+        · время:
+        {% for stage, ms in result.timings_ms.items() %}
+            {{ stage }}={{ "%.0f"|format(ms) }}мс{% if not loop.last %},{% endif %}
+        {% endfor %}
+    {% endif %}
+</div>
+
+{% if result['debug'] %}
+<div class="pipeline-bar">
+    <button class="pipeline-btn" id="pipeline-btn"
+            onclick="var p=document.getElementById('pipeline-panel'); p.classList.toggle('hidden'); this.querySelector('.arrow').classList.toggle('open')">
+        Как работал поиск
+        <span class="arrow">&#9658;</span>
+    </button>
+</div>
+<div id="pipeline-panel" class="pipeline-panel hidden">
+    <div class="stages">
+
+        <div class="stage-card">
+            <div class="stage-hd">
+                <span class="stage-num">1</span>
+                <span class="stage-title">Предобработка</span>
+                {% if result['timings_ms']['preprocess'] is defined %}
+                <span class="stage-ms">{{ "%.0f"|format(result['timings_ms']['preprocess']) }} мс</span>
+                {% endif %}
+            </div>
+            <dl class="stage-kv">
+                <dt>Запрос</dt>
+                <dd>
+                    {% if result['debug']['preprocess']['corrected'] != result['debug']['preprocess']['original'] %}
+                        <s class="muted-txt">{{ result['debug']['preprocess']['original'] }}</s>
+                        &rarr; <b>{{ result['debug']['preprocess']['corrected'] }}</b>
+                    {% else %}
+                        {{ result['debug']['preprocess']['original'] }}
+                    {% endif %}
+                </dd>
+                <dt>Тип</dt>
+                <dd><span class="pill">{{ result['debug']['preprocess']['query_type'] }}</span></dd>
+                <dt>Леммы</dt>
+                <dd class="token-list">{% for t in result['debug']['preprocess']['lemmas'] %}<code>{{ t }}</code>{% endfor %}</dd>
+                {% if result['debug']['preprocess']['expanded_terms'] %}
+                <dt>Расширение</dt>
+                <dd class="token-list">{% for t in result['debug']['preprocess']['expanded_terms'] %}<code>{{ t }}</code>{% endfor %}</dd>
+                {% endif %}
+            </dl>
+        </div>
+
+        <div class="stage-card">
+            <div class="stage-hd">
+                <span class="stage-num">2</span>
+                <span class="stage-title">Поиск</span>
+                {% if result['timings_ms']['retrieve'] is defined %}
+                <span class="stage-ms">{{ "%.0f"|format(result['timings_ms']['retrieve']) }} мс</span>
+                {% endif %}
+            </div>
+            <dl class="stage-kv">
+                <dt>Кандидатов найдено</dt>
+                <dd><b>{{ result['debug']['retrieve']['candidates_count'] }}</b></dd>
+            </dl>
+            {% if result['debug']['retrieve']['top_candidates'] %}
+            <p class="stage-sub">Топ-5 по RRF:</p>
+            <table class="mini-table">
+                <thead><tr><th>Шифр</th><th>BM25</th><th>SBERT</th><th>RRF</th></tr></thead>
+                <tbody>
+                {% for c in result['debug']['retrieve']['top_candidates'] %}
+                <tr>
+                    <td><code>{{ c['obosn'] }}</code></td>
+                    <td>{{ "%.3f"|format(c['bm25']) }}</td>
+                    <td>{{ "%.3f"|format(c['sbert']) }}</td>
+                    <td class="rrf-val">{{ "%.3f"|format(c['rrf']) }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+
+        <div class="stage-card">
+            <div class="stage-hd">
+                <span class="stage-num">3</span>
+                <span class="stage-title">Ранжирование</span>
+                {% if result['timings_ms']['rank'] is defined %}
+                <span class="stage-ms">{{ "%.0f"|format(result['timings_ms']['rank']) }} мс</span>
+                {% endif %}
+            </div>
+            <dl class="stage-kv">
+                <dt>После ранжирования</dt>
+                <dd><b>{{ result['debug']['rank']['items_count'] }}</b></dd>
+            </dl>
+            {% if result['debug']['rank']['top_items'] %}
+            <p class="stage-sub">Топ-5:</p>
+            <table class="mini-table">
+                <thead><tr><th>Шифр</th><th>Score</th><th>Признаки</th></tr></thead>
+                <tbody>
+                {% for item in result['debug']['rank']['top_items'] %}
+                <tr>
+                    <td><code>{{ item['obosn'] }}</code></td>
+                    <td class="rrf-val">{{ "%.4f"|format(item['score']) }}</td>
+                    <td>{% for k, v in item['features'].items() %}<span class="feat">{{ k }}={{ "%.2f"|format(v) }}</span>{% endfor %}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+
+        <div class="stage-card">
+            <div class="stage-hd">
+                <span class="stage-num">4</span>
+                <span class="stage-title">Постобработка</span>
+                {% if result['timings_ms']['postprocess'] is defined %}
+                <span class="stage-ms">{{ "%.0f"|format(result['timings_ms']['postprocess']) }} мс</span>
+                {% endif %}
+            </div>
+            <dl class="stage-kv">
+                <dt>Итоговых позиций</dt>
+                <dd><b>{{ result['debug']['postprocess']['items_count'] }}</b></dd>
+                <dt>Комплектов</dt>
+                <dd><b>{{ result['debug']['postprocess']['kits_count'] }}</b></dd>
+            </dl>
+        </div>
+
+    </div>
+</div>
+{% endif %}
+
+<div class="two-col">
+    <section class="results">
+        <h2>Найденные расценки</h2>
+        {% if not result['items'] %}
+            <p class="empty">Ничего не найдено. Попробуйте переформулировать запрос.</p>
+        {% else %}
+            <ol class="result-list">
+                {% for item in result['items'] %}
+                <li class="result-item" data-obosn="{{ item.obosn }}">
+                    <div class="row">
+                        <code class="obosn">{{ item.obosn }}</code>
+                        <span class="type-badge type-{{ item.entity_type }}">
+                            {%- if item.entity_type == "rate" -%}расценка
+                            {%- elif item.entity_type == "material" -%}материал
+                            {%- elif item.entity_type == "mechanism" -%}механизм
+                            {%- elif item.entity_type == "device" -%}оборудование
+                            {%- else -%}{{ item.entity_type }}{%- endif -%}
+                        </span>
+                        <span class="score" title="итоговый скор">{{ "%.3f"|format(item.score) }}</span>
+                    </div>
+                    <div class="naim">{{ item.naim }}</div>
+                    {% if item.rate_group_name %}
+                    <div class="group-context">📁 {{ item.rate_group_name }}</div>
+                    {% endif %}
+                    <div class="actions">
+                        <button class="link feedback" data-label="2">Это то, что нужно</button>
+                        <button class="link feedback secondary" data-label="0">Не релевантно</button>
+                    </div>
+                </li>
+                {% endfor %}
+            </ol>
+        {% endif %}
+    </section>
+
+    <aside class="kits">
+        <h2>Технологические комплекты</h2>
+        {% if not result.kits %}
+            <p class="empty">Комплекты не предложены. Они формируются на основе исторических смет; добавьте больше данных и переобучите.</p>
+        {% else %}
+            {% for kit in result.kits %}
+            <article class="kit">
+                <header>
+                    <strong>{{ kit.seed_naim }}</strong>
+                    <div class="kit-meta">
+                        conf={{ "%.2f"|format(kit.confidence) }} ·
+                        support={{ "%.2f"|format(kit.support) }}
+                    </div>
+                </header>
+                <ul>
+                    {% for member in kit.members %}
+                    <li>
+                        <code>{{ member.obosn }}</code> — {{ member.naim }}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </article>
+            {% endfor %}
+        {% endif %}
+    </aside>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const QUERY = {{ query|tojson }};
+document.querySelectorAll('.feedback').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+        const item = e.target.closest('.result-item');
+        const obosn = item.dataset.obosn;
+        const label = parseInt(e.target.dataset.label, 10);
+        e.target.disabled = true;
+        e.target.textContent = '✓';
+        try {
+            await fetch('{{ url_for("feedback") }}', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({query: QUERY, obosn, label}),
+            });
+        } catch (err) {
+            console.warn(err);
+        }
+    });
+});
+</script>
+{% endblock %}

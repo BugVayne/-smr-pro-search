@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+.venv/
+env/
+source/
+&&/
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Data and models (not in repo)
+data/raw/**
+data/processed/**
+data/models/**
+data/indices/**
+data/logs/**
+data/*.db
+data/*.sqlite
+
+# Allow gitkeep placeholders
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/models/.gitkeep
+!data/indices/.gitkeep
+!data/logs/.gitkeep
+
+# Runtime
+.run_pids
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
