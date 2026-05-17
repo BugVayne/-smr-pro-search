@@ -1,16 +1,15 @@
-"""Building technological kits from association rules.
+"""Building technological kits and related-item enrichment.
 
-For each of the top-N ranked items the kit builder queries the
-association-rule store for rules whose antecedent contains that
-rascenka. Consequents are aggregated, de-duplicated, and returned as
-``TechKit`` objects.
+build_kits: FP-Growth association rules → TechKit objects (aggregated mode).
+enrich_with_related: per-item co-occurring расценки enrichment (atomic mode).
+build_ptm_groups: matched PTMs → PTMGroup objects (aggregated mode).
 """
 from __future__ import annotations
 
 from typing import List
 
-from common.db import find_rules_for, get_rascenki
-from common.models import RankedItem, Rascenka, TechKit
+from common.db import find_rules_for, get_cooccurring_from_transactions, get_rascenki
+from common.models import PTMGroup, PTMMatchInfo, RankedItem, Rascenka, TechKit
 
 
 def build_kits(items: List[RankedItem], top_seeds: int = 5, max_kit_size: int = 10) -> List[TechKit]:
@@ -77,3 +76,59 @@ def build_kits(items: List[RankedItem], top_seeds: int = 5, max_kit_size: int = 
             seen.add((seed.obosn, m.obosn))
 
     return kits
+
+
+def enrich_with_related(items: List[RankedItem], max_related: int = 3) -> List[RankedItem]:
+    """Atomic mode: attach co-occurring расценки to each ranked item.
+
+    Uses FP-Growth consequents (confidence-sorted) as primary source.
+    Falls back to raw transaction co-occurrence when no rules exist.
+    """
+    for item in items:
+        if item.entity_type != "rate":
+            continue
+
+        rules = find_rules_for(item.obosn, limit=15)
+        if rules:
+            consequents: dict[str, float] = {}
+            for rule in rules:
+                for c in rule["consequent"]:
+                    if c == item.obosn:
+                        continue
+                    if c not in consequents or rule["confidence"] > consequents[c]:
+                        consequents[c] = rule["confidence"]
+            related_codes = sorted(consequents, key=lambda x: -consequents[x])[:max_related]
+        else:
+            cooc = get_cooccurring_from_transactions(item.obosn, limit=max_related)
+            related_codes = [r["obosn"] for r in cooc]
+
+        if related_codes:
+            rows = get_rascenki(related_codes)
+            rows_by_obosn = {r["obosn"]: r for r in rows}
+            item.related = [
+                Rascenka(
+                    obosn=r["obosn"],
+                    naim=r["naim"],
+                    tip=r.get("tip") or "100",
+                    ed_izm=r.get("ed_izm"),
+                    entity_type=r.get("entity_type", "rate"),
+                    rate_group_id=r.get("rate_group_id"),
+                )
+                for code in related_codes
+                if (r := rows_by_obosn.get(code))
+            ]
+
+    return items
+
+
+def build_ptm_groups(matched_ptms: List[PTMMatchInfo], max_members: int = 15) -> List[PTMGroup]:
+    """Aggregated mode: convert PTMMatchInfo list to PTMGroup list."""
+    return [
+        PTMGroup(
+            ptm_naim=ptm.ptm_naim,
+            overlap_score=ptm.overlap_score,
+            members=ptm.top_rascenki[:max_members],
+        )
+        for ptm in matched_ptms
+        if ptm.top_rascenki
+    ]

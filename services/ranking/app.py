@@ -27,9 +27,9 @@ def health():
 @app.post("/rank")
 def rank():
     payload = RankRequest(**request.get_json(force=True))
-    log.info("rank: %d candidates", len(payload.candidates))
 
     if not payload.candidates:
+        log.warning("RANK  → 0 candidates received, skipping")
         return jsonify(RankResponse(items=[]).model_dump())
 
     features = build_feature_matrix(payload.lemmas, payload.candidates, payload.context)
@@ -51,6 +51,20 @@ def rank():
         )
         for c, s, feats in scored[:top_k]
     ]
+
+    ranker_mode = "catboost" if _ranker._model is not None else "linear_fallback"
+    top3_lines = ", ".join(
+        f"{it.obosn}(score={it.score:.4f} bm25={it.features['f1_bm25']:.2f} "
+        f"sbert={it.features['f2_sbert']:.3f} ovlp={it.features['f3_overlap']:.2f})"
+        for it in items[:3]
+    )
+    log.info("RANK  «%s»", payload.query)
+    log.info("  ranker    : %s", ranker_mode)
+    log.info("  input     : %d candidates → top-%d", len(payload.candidates), top_k)
+    log.info("  top3      : %s", top3_lines or "—")
+    if payload.context:
+        log.info("  context   : %s", payload.context)
+
     return jsonify(RankResponse(items=items).model_dump())
 
 

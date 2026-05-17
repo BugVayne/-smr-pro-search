@@ -13,7 +13,7 @@ from common.config import PORTS
 from common.logging_config import get_logger
 from common.models import PreprocessRequest, PreprocessResponse
 
-from services.preprocessing.classifier import QueryClassifier
+from services.preprocessing.classifier import CODE_RE, QueryClassifier
 from services.preprocessing.lemmatizer import lemmatize
 from services.preprocessing.query_expander import QueryExpander
 from services.preprocessing.spell_correction import SpellCorrector
@@ -35,12 +35,24 @@ def health():
 @app.post("/preprocess")
 def preprocess():
     payload = PreprocessRequest(**request.get_json(force=True))
-    log.info("preprocess: %r", payload.query)
 
     corrected = _speller.correct(payload.query)
     lemmas = lemmatize(corrected)
     expanded = _expander.expand(lemmas)
     qtype = _classifier.predict(payload.query)
+
+    m = CODE_RE.search(payload.query)
+    extracted_code = m.group(0).upper() if m else None
+
+    spell_note = "unchanged" if corrected == payload.query else f"→ «{corrected}»"
+    new_terms = [t for t in expanded if t not in lemmas]
+    log.info("PREPROCESS «%s»", payload.query)
+    log.info("  spell     : %s", spell_note)
+    log.info("  lemmas(%d) : %s", len(lemmas), lemmas)
+    log.info("  expanded(%d): +%s", len(new_terms), new_terms)
+    log.info("  type      : %s", qtype)
+    if extracted_code:
+        log.info("  code      : %s (direct lookup)", extracted_code)
 
     resp = PreprocessResponse(
         original=payload.query,
@@ -48,6 +60,7 @@ def preprocess():
         lemmas=lemmas,
         expanded_terms=expanded,
         query_type=qtype,
+        extracted_code=extracted_code,
     )
     return jsonify(resp.model_dump())
 

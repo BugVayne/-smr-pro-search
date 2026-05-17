@@ -51,11 +51,17 @@ class SemanticSearch:
             log.warning("faiss or sentence-transformers missing – semantic disabled")
             return
 
+        try:
+            import torch
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        except ImportError:
+            device = "cpu"
+
         model_dir = model_dir or SBERT_MODEL_DIR
         model_to_load = str(model_dir) if Path(model_dir).exists() else SBERT_BASE_MODEL
         try:
-            self.model = SentenceTransformer(model_to_load)
-            log.info("Loaded SBERT model: %s", model_to_load)
+            self.model = SentenceTransformer(model_to_load, device=device)
+            log.info("Loaded SBERT model: %s on %s", model_to_load, device.upper())
         except Exception as exc:
             log.warning("Could not load SBERT model: %s", exc)
             return

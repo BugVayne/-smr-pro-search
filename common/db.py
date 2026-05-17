@@ -410,6 +410,30 @@ def replace_rules(rules: List[Dict[str, Any]]) -> None:
         )
 
 
+def get_cooccurring_from_transactions(obosn: str, limit: int = 5) -> List[Dict[str, Any]]:
+    """Return расценки most frequently co-occurring with obosn across transactions.
+
+    Used as fallback when FP-Growth rules are absent.
+    Returns list of {"obosn": str, "freq": int} sorted by freq desc.
+    """
+    with db() as conn:
+        rows = conn.execute(
+            """
+            SELECT e2.value AS obosn, COUNT(*) AS freq
+            FROM transactions t,
+                 json_each(t.items) e1,
+                 json_each(t.items) e2
+            WHERE e1.value = ?
+              AND e2.value != ?
+            GROUP BY e2.value
+            ORDER BY freq DESC
+            LIMIT ?
+            """,
+            (obosn, obosn, limit),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def find_rules_for(obosn: str, limit: int = 10) -> List[Dict[str, Any]]:
     """Find association rules whose antecedent contains obosn."""
     with db() as conn:

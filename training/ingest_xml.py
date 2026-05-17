@@ -27,6 +27,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Dict
 
+from common.code_mapper import get_mapper
 from common.config import RAW_DIR
 from common.db import (
     insert_transaction,
@@ -61,15 +62,16 @@ def ingest(xml_dir: Path, recursive: bool = True) -> Dict[str, int]:
             "transactions":  N,
         }
     """
+    mapper = get_mapper()
     files = discover_xml_files(xml_dir, recursive=recursive)
     if not files:
         log.warning("No XML files found under %s", xml_dir)
         return {k: 0 for k in
                 ("files_total", "files_new", "files_skipped",
-                 "ptms", "rascenki", "transactions")}
+                 "ptms", "rascenki", "transactions", "codes_translated")}
 
     rascenki_seen: Dict[str, dict] = {}
-    files_new = files_skipped = ptms_total = tx_total = 0
+    files_new = files_skipped = ptms_total = tx_total = codes_translated = 0
 
     for idx, path in enumerate(files, 1):
         fhash = file_hash(path)
@@ -87,11 +89,16 @@ def ingest(xml_dir: Path, recursive: bool = True) -> Dict[str, int]:
         try:
             ptms_in_file = 0
             for ptm in parse_xml(path):
-                # Collect rascenki for the catalogue
-                for r in ptm.rascenki:
-                    if r.obosn not in rascenki_seen:
-                        rascenki_seen[r.obosn] = {
-                            "obosn": r.obosn,
+                # Translate codes 2012 → 2022 before storing
+                raw_items = [r.obosn for r in ptm.rascenki]
+                translated_items, n_tr = mapper.translate_list(raw_items)
+                codes_translated += n_tr
+
+                # Collect rascenki for the catalogue using translated codes
+                for r, obosn_22 in zip(ptm.rascenki, translated_items):
+                    if obosn_22 not in rascenki_seen:
+                        rascenki_seen[obosn_22] = {
+                            "obosn": obosn_22,
                             "naim": r.naim,
                             "tip": r.tip,
                             "ed_izm": r.ed_izm or "",
@@ -99,11 +106,10 @@ def ingest(xml_dir: Path, recursive: bool = True) -> Dict[str, int]:
                         }
 
                 # Every PTM → one transaction (no content dedup)
-                items = [r.obosn for r in ptm.rascenki]
-                if items:
+                if translated_items:
                     insert_transaction(
                         ptm.ptm_kod, ptm.ptm_naim, ptm.glava,
-                        items, file_hash=fhash,
+                        translated_items, file_hash=fhash,
                     )
                     ptms_in_file += 1
 
@@ -121,12 +127,13 @@ def ingest(xml_dir: Path, recursive: bool = True) -> Dict[str, int]:
         upsert_rascenki(rascenki_seen.values())
 
     stats = {
-        "files_total":   len(files),
-        "files_new":     files_new,
-        "files_skipped": files_skipped,
-        "ptms":          ptms_total,
-        "rascenki":      len(rascenki_seen),
-        "transactions":  tx_total,
+        "files_total":      len(files),
+        "files_new":        files_new,
+        "files_skipped":    files_skipped,
+        "ptms":             ptms_total,
+        "rascenki":         len(rascenki_seen),
+        "transactions":     tx_total,
+        "codes_translated": codes_translated,
     }
     log.info("=" * 60)
     log.info("Ingestion summary")
@@ -136,6 +143,7 @@ def ingest(xml_dir: Path, recursive: bool = True) -> Dict[str, int]:
     log.info("  Files skipped       : %d (already in DB)", stats["files_skipped"])
     log.info("  PTMs / transactions : %d", stats["ptms"])
     log.info("  Unique rascenki     : %d", stats["rascenki"])
+    log.info("  Codes translated    : %d (2012 → 2022)", stats["codes_translated"])
     return stats
 
 

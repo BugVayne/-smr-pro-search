@@ -61,6 +61,22 @@
             </dl>
         </div>
 
+        {% if 'direct_lookup' in result['debug'] %}
+        <div class="stage-card">
+            <div class="stage-hd">
+                <span class="stage-num">2</span>
+                <span class="stage-title">Прямой поиск по коду</span>
+            </div>
+            <dl class="stage-kv">
+                <dt>Шифр</dt>
+                <dd><code>{{ result['debug']['direct_lookup']['obosn'] }}</code></dd>
+                <dt>Найдено</dt>
+                <dd><b>{{ 'да' if result['debug']['direct_lookup']['found'] else 'нет' }}</b></dd>
+            </dl>
+        </div>
+        {% else %}
+
+        {% if 'retrieve' in result['debug'] %}
         <div class="stage-card">
             <div class="stage-hd">
                 <span class="stage-num">2</span>
@@ -90,7 +106,9 @@
             </table>
             {% endif %}
         </div>
+        {% endif %}
 
+        {% if 'rank' in result['debug'] %}
         <div class="stage-card">
             <div class="stage-hd">
                 <span class="stage-num">3</span>
@@ -106,20 +124,22 @@
             {% if result['debug']['rank']['top_items'] %}
             <p class="stage-sub">Топ-5:</p>
             <table class="mini-table">
-                <thead><tr><th>Шифр</th><th>Score</th><th>Признаки</th></tr></thead>
+                <thead><tr><th>Шифр</th><th>Наименование</th><th>Score</th></tr></thead>
                 <tbody>
                 {% for item in result['debug']['rank']['top_items'] %}
                 <tr>
                     <td><code>{{ item['obosn'] }}</code></td>
+                    <td class="muted-txt">{{ item['naim'][:60] }}{% if item['naim']|length > 60 %}…{% endif %}</td>
                     <td class="rrf-val">{{ "%.4f"|format(item['score']) }}</td>
-                    <td>{% for k, v in item['features'].items() %}<span class="feat">{{ k }}={{ "%.2f"|format(v) }}</span>{% endfor %}</td>
                 </tr>
                 {% endfor %}
                 </tbody>
             </table>
             {% endif %}
         </div>
+        {% endif %}
 
+        {% if 'postprocess' in result['debug'] %}
         <div class="stage-card">
             <div class="stage-hd">
                 <span class="stage-num">4</span>
@@ -131,10 +151,23 @@
             <dl class="stage-kv">
                 <dt>Итоговых позиций</dt>
                 <dd><b>{{ result['debug']['postprocess']['items_count'] }}</b></dd>
-                <dt>Комплектов</dt>
+                {% if result['debug']['postprocess']['kits_count'] is defined %}
+                <dt>FP-Growth комплектов</dt>
                 <dd><b>{{ result['debug']['postprocess']['kits_count'] }}</b></dd>
+                {% endif %}
+                {% if result['debug']['postprocess']['ptm_groups_count'] is defined %}
+                <dt>ПТМ-групп</dt>
+                <dd><b>{{ result['debug']['postprocess']['ptm_groups_count'] }}</b></dd>
+                {% endif %}
+                {% if result['debug']['postprocess']['items_with_related'] is defined %}
+                <dt>Позиций с похожими</dt>
+                <dd><b>{{ result['debug']['postprocess']['items_with_related'] }}</b></dd>
+                {% endif %}
             </dl>
         </div>
+        {% endif %}
+
+        {% endif %}
 
     </div>
 </div>
@@ -147,7 +180,7 @@
             <p class="empty">Ничего не найдено. Попробуйте переформулировать запрос.</p>
         {% else %}
             <ol class="result-list">
-                {% for item in result['items'] %}
+                {% for item in result['items'][:10] %}
                 <li class="result-item" data-obosn="{{ item.obosn }}">
                     <div class="row">
                         <code class="obosn">{{ item.obosn }}</code>
@@ -162,7 +195,17 @@
                     </div>
                     <div class="naim">{{ item.naim }}</div>
                     {% if item.rate_group_name %}
-                    <div class="group-context">📁 {{ item.rate_group_name }}</div>
+                    <div class="group-context">&#128193; {{ item.rate_group_name }}</div>
+                    {% endif %}
+                    {% if item.related %}
+                    <div class="related-block">
+                        <span class="related-label">Часто применяется вместе:</span>
+                        <ul class="related-list">
+                            {% for r in item.related %}
+                            <li><code>{{ r.obosn }}</code> — {{ r.naim }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
                     {% endif %}
                     <div class="actions">
                         <button class="link feedback" data-label="2">Это то, что нужно</button>
@@ -175,28 +218,51 @@
     </section>
 
     <aside class="kits">
+        {% if result['ptm_groups'] %}
+        <h2>Типовой состав работ</h2>
+        <p class="aside-hint">На основе исторических смет для похожих объектов</p>
+        {% for group in result['ptm_groups'] %}
+        <article class="kit ptm-group">
+            <header>
+                <strong>{{ group.ptm_naim }}</strong>
+                <div class="kit-meta">совпадение {{ "%.0f"|format(group.overlap_score * 100) }}%</div>
+            </header>
+            <ul>
+                {% for member in group.members %}
+                <li><code>{{ member.obosn }}</code> — {{ member.naim }}</li>
+                {% endfor %}
+            </ul>
+        </article>
+        {% endfor %}
+
+        {% elif result['kits'] %}
         <h2>Технологические комплекты</h2>
-        {% if not result.kits %}
-            <p class="empty">Комплекты не предложены. Они формируются на основе исторических смет; добавьте больше данных и переобучите.</p>
+        {% for kit in result['kits'] %}
+        <article class="kit">
+            <header>
+                <strong>{{ kit.seed_naim }}</strong>
+                <div class="kit-meta">
+                    conf={{ "%.2f"|format(kit.confidence) }} ·
+                    support={{ "%.2f"|format(kit.support) }}
+                </div>
+            </header>
+            <ul>
+                {% for member in kit.members %}
+                <li><code>{{ member.obosn }}</code> — {{ member.naim }}</li>
+                {% endfor %}
+            </ul>
+        </article>
+        {% endfor %}
+
         {% else %}
-            {% for kit in result.kits %}
-            <article class="kit">
-                <header>
-                    <strong>{{ kit.seed_naim }}</strong>
-                    <div class="kit-meta">
-                        conf={{ "%.2f"|format(kit.confidence) }} ·
-                        support={{ "%.2f"|format(kit.support) }}
-                    </div>
-                </header>
-                <ul>
-                    {% for member in kit.members %}
-                    <li>
-                        <code>{{ member.obosn }}</code> — {{ member.naim }}
-                    </li>
-                    {% endfor %}
-                </ul>
-            </article>
-            {% endfor %}
+        <h2>Типовой состав работ</h2>
+        <p class="empty">
+            {% if result['query_type'] == 'aggregated' %}
+            Состав не определён. Попробуйте уточнить запрос или используйте название ПТМ из справочника.
+            {% else %}
+            Для точечного запроса состав не формируется — связанные расценки показаны рядом с каждой позицией.
+            {% endif %}
+        </p>
         {% endif %}
     </aside>
 </div>

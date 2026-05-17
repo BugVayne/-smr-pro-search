@@ -6,6 +6,8 @@ pydantic>=2.5.0
 # --- NLP & search ---
 rank_bm25>=0.2.2
 sentence-transformers>=2.5.0
+datasets>=2.14.0            # required by sentence-transformers model.fit()
+accelerate>=1.1.0           # required by transformers Trainer (used by sentence-transformers)
 faiss-cpu>=1.7.4
 symspellpy>=6.7.7
 natasha>=1.6.0

@@ -33,8 +33,10 @@ from common.config import (
     SYMSPELL_DICT_PATH,
 )
 from common.db import all_rascenki, all_rate_groups, rate_group_path
+from common.gpu import get_device, gpu_batch_size
 from common.logging_config import get_logger
 from services.preprocessing.lemmatizer import lemmatize, tokenize
+from training.build_ptm_index import build_ptm_index
 
 log = get_logger(__name__)
 
@@ -145,19 +147,22 @@ def build_faiss() -> int:
     rate_group_ids = [r.get("rate_group_id") for r in rows]
     augmented = [_augmented_text(r, group_text) for r in rows]
 
+    device = get_device()
     model_to_load = str(SBERT_MODEL_DIR) if Path(SBERT_MODEL_DIR).exists() else SBERT_BASE_MODEL
     try:
-        model = SentenceTransformer(model_to_load)
+        model = SentenceTransformer(model_to_load, device=device)
     except Exception as exc:
         log.warning("Could not load SBERT (%s) – FAISS not built", exc)
         return 0
 
-    log.info("Encoding %d rascenki with %s", len(rows), model_to_load)
+    batch = gpu_batch_size(cpu_size=32, gpu_size=256)
+    log.info("Encoding %d rascenki with %s on %s (batch=%d)",
+             len(rows), model_to_load, device.upper(), batch)
     embeddings = model.encode(
         augmented,
         normalize_embeddings=True,
-        show_progress_bar=False,
-        batch_size=32,
+        show_progress_bar=True,
+        batch_size=batch,
     )
     embeddings = np.asarray(embeddings, dtype="float32")
     dim = embeddings.shape[1]
@@ -229,6 +234,7 @@ def build_all(skip_faiss: bool = False) -> None:
         log.info("Skipping FAISS index (--skip-faiss)")
     else:
         build_faiss()
+    build_ptm_index()
 
 
 if __name__ == "__main__":

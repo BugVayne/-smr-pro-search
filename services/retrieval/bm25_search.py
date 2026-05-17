@@ -8,11 +8,15 @@ by ``training.build_indices`` and serialised to disk.
 from __future__ import annotations
 
 import pickle
+import re
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from common.config import BM25_INDEX_PATH
 from common.logging_config import get_logger
+
+_NUMERIC_BOOST = 3  # repeat numeric tokens N times so BM25 weights them higher
+_HAS_DIGIT = re.compile(r'\d')
 
 log = get_logger(__name__)
 
@@ -61,7 +65,15 @@ class BM25Search:
         """
         if self.index is None or not query_tokens:
             return []
-        scores = self.index.get_scores(query_tokens)
+
+        # Repeat numeric tokens so BM25 weights them above low-IDF threshold.
+        # rank_bm25 uses Counter(query), so repetition increases contribution.
+        boosted = []
+        for tok in query_tokens:
+            boosted.append(tok)
+            if _HAS_DIGIT.search(tok):
+                boosted.extend([tok] * (_NUMERIC_BOOST - 1))
+        scores = self.index.get_scores(boosted)
 
         eligible = range(len(self.obosn_list))
         if entity_filter is not None:

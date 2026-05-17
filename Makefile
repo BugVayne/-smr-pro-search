@@ -33,6 +33,9 @@ import: init
 sample: init
 	$(PY) scripts/load_sample_data.py
 
+migrate-codes:
+	$(PY) scripts/migrate_code_mapping.py
+
 train:
 	$(PY) -m training.pipeline
 
@@ -41,6 +44,9 @@ train-fast:
 
 train-bm25:
 	$(PY) -m training.pipeline --skip-sbert --skip-catboost --skip-faiss
+
+train-classifier:
+	$(PY) -m training.train_query_classifier
 
 run:
 	$(PY) scripts/run_all.py
@@ -51,5 +57,5 @@ stop:
 test:
 	$(PY) scripts/smoke_test.py
 
-clean:
-	$(PY) -c "import shutil, pathlib, glob, os; [pathlib.Path(p).unlink(missing_ok=True) for p in ['data/smr_pro.db']]; [shutil.rmtree(p, True) for p in ['data/indices','data/models','data/processed']]; [pathlib.Path(f).unlink(missing_ok=True) for f in glob.glob('data/logs/*.log')]; [shutil.rmtree(os.path.join(r,d), True) for r,ds,_ in os.walk('.') for d in ds if d=='__pycache__']"
+clean: stop
+	$(PY) scripts/clean.py

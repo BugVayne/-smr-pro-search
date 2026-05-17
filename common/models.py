@@ -21,6 +21,20 @@ class Rascenka(BaseModel):
     rate_group_name: Optional[str] = None
 
 
+class PTMMatchInfo(BaseModel):
+    """A PTM that matched the query, with its top расценки."""
+    ptm_naim: str
+    overlap_score: float
+    top_rascenki: List[Rascenka] = Field(default_factory=list)
+
+
+class PTMGroup(BaseModel):
+    """Result group for aggregated queries: a matched PTM with its typical расценки."""
+    ptm_naim: str
+    overlap_score: float
+    members: List[Rascenka] = Field(default_factory=list)
+
+
 class PTMTransaction(BaseModel):
     """A project-technical module taken from a historical estimate."""
     ptm_kod: str           # e.g. "Ж2-10"
@@ -41,6 +55,7 @@ class PreprocessResponse(BaseModel):
     lemmas: List[str]         # normalised tokens
     expanded_terms: List[str] # synonyms / nearest neighbours
     query_type: str           # "atomic" | "aggregated"
+    extracted_code: Optional[str] = None  # шифр расценки если обнаружен в запросе
 
 
 class RetrieveRequest(BaseModel):
@@ -58,13 +73,16 @@ class CandidateScore(BaseModel):
     rate_group_name: Optional[str] = None
     bm25_score: float = 0.0
     sbert_score: float = 0.0
+    ptm_score: float = 0.0
     rrf_score: float = 0.0
     bm25_rank: Optional[int] = None
     sbert_rank: Optional[int] = None
+    ptm_rank: Optional[int] = None
 
 
 class RetrieveResponse(BaseModel):
     candidates: List[CandidateScore]
+    matched_ptms: List[PTMMatchInfo] = Field(default_factory=list)
 
 
 class RankRequest(BaseModel):
@@ -83,6 +101,7 @@ class RankedItem(BaseModel):
     rate_group_id: Optional[int] = None
     rate_group_name: Optional[str] = None
     features: Dict[str, float] = Field(default_factory=dict)
+    related: List[Rascenka] = Field(default_factory=list)  # populated for atomic queries
 
 
 class RankResponse(BaseModel):
@@ -92,6 +111,7 @@ class RankResponse(BaseModel):
 class PostprocessRequest(BaseModel):
     items: List[RankedItem]
     query_type: str = "atomic"
+    matched_ptms: List[PTMMatchInfo] = Field(default_factory=list)
 
 
 class TechKit(BaseModel):
@@ -106,6 +126,7 @@ class TechKit(BaseModel):
 class PostprocessResponse(BaseModel):
     items: List[RankedItem]
     kits: List[TechKit] = Field(default_factory=list)
+    ptm_groups: List[PTMGroup] = Field(default_factory=list)
 
 
 # --- Gateway-level pipeline --------------------------------------------------
@@ -121,5 +142,6 @@ class SearchResponse(BaseModel):
     query_type: str
     items: List[RankedItem]
     kits: List[TechKit] = Field(default_factory=list)
+    ptm_groups: List[PTMGroup] = Field(default_factory=list)
     timings_ms: Dict[str, float] = Field(default_factory=dict)
     debug: Dict[str, Any] = Field(default_factory=dict)

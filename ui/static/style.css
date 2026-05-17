@@ -204,3 +204,35 @@ section.results h2, aside.kits h2 {
     padding: 0 4px; margin: 1px; font-size: 11px; color: var(--muted);
     white-space: nowrap;
 }
+
+/* Related items (atomic mode) */
+.related-block {
+    margin: 6px 0 4px;
+    padding: 6px 10px;
+    background: #f0f4ff;
+    border-left: 3px solid var(--accent);
+    border-radius: 0 4px 4px 0;
+    font-size: 13px;
+}
+.related-label {
+    color: var(--muted);
+    font-size: 12px;
+    display: block;
+    margin-bottom: 4px;
+}
+.related-list {
+    margin: 0; padding: 0; list-style: none;
+}
+.related-list li { padding: 2px 0; }
+.related-list code { font-size: 11px; color: var(--accent-dark); }
+
+/* PTM groups (aggregated mode) */
+.ptm-group header {
+    background: #eef6ee;
+    border-left: 3px solid #3a9e4f;
+}
+.aside-hint {
+    font-size: 12px;
+    color: var(--muted);
+    margin: -8px 0 12px;
+}

@@ -20,6 +20,7 @@ from common.config import (
     RANKING_URL,
     RETRIEVAL_URL,
 )
+from common.db import get_rascenka
 from common.logging_config import get_logger
 from common.models import (
     PostprocessRequest,
@@ -28,11 +29,13 @@ from common.models import (
     PreprocessResponse,
     RankRequest,
     RankResponse,
+    RankedItem,
     RetrieveRequest,
     RetrieveResponse,
     SearchRequest,
     SearchResponse,
 )
+from services.postprocessing.kit_builder import enrich_with_related
 
 log = get_logger("gateway.pipeline")
 _session = requests.Session()
@@ -69,6 +72,38 @@ def run_pipeline(req: SearchRequest) -> SearchResponse:
     pre = PreprocessResponse(**pre_raw)
     timings["preprocess"] = (time.perf_counter() - t) * 1000
 
+    # Short-circuit: if query is a direct rate code, look it up in DB and return.
+    if pre.extracted_code:
+        row = get_rascenka(pre.extracted_code)
+        if row:
+            item = RankedItem(
+                obosn=row["obosn"],
+                naim=row["naim"],
+                score=1.0,
+                entity_type=row.get("entity_type", "rate"),
+                rate_group_id=row.get("rate_group_id"),
+            )
+            items = enrich_with_related([item])
+            return SearchResponse(
+                query=req.query,
+                corrected=pre.corrected,
+                query_type="atomic",
+                items=items,
+                timings_ms=timings,
+                debug={
+                    "preprocess": {
+                        "original": pre.original,
+                        "corrected": pre.corrected,
+                        "lemmas": pre.lemmas,
+                        "expanded_terms": pre.expanded_terms,
+                        "query_type": pre.query_type,
+                        "extracted_code": pre.extracted_code,
+                    },
+                    "direct_lookup": {"obosn": pre.extracted_code, "found": True},
+                },
+            )
+        # Code not found in DB — fall through to full pipeline
+
     # 2. retrieve
     t = time.perf_counter()
     ret_raw = _post(
@@ -103,6 +138,7 @@ def run_pipeline(req: SearchRequest) -> SearchResponse:
         PostprocessRequest(
             items=rank.items,
             query_type=pre.query_type,
+            matched_ptms=ret.matched_ptms,
         ).model_dump(),
     )
     post = PostprocessResponse(**post_raw)
@@ -114,6 +150,7 @@ def run_pipeline(req: SearchRequest) -> SearchResponse:
         query_type=pre.query_type,
         items=post.items,
         kits=post.kits,
+        ptm_groups=post.ptm_groups,
         timings_ms=timings,
         debug={
             "preprocess": {
@@ -125,6 +162,10 @@ def run_pipeline(req: SearchRequest) -> SearchResponse:
             },
             "retrieve": {
                 "candidates_count": len(ret.candidates),
+                "matched_ptms": [
+                    {"ptm_naim": p.ptm_naim, "overlap": round(p.overlap_score, 3)}
+                    for p in ret.matched_ptms
+                ],
                 "top_candidates": [
                     {
                         "obosn": c.obosn,
@@ -151,6 +192,8 @@ def run_pipeline(req: SearchRequest) -> SearchResponse:
             "postprocess": {
                 "items_count": len(post.items),
                 "kits_count": len(post.kits),
+                "ptm_groups_count": len(post.ptm_groups),
+                "items_with_related": sum(1 for it in post.items if it.related),
             },
         },
     )

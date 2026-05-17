@@ -19,6 +19,7 @@ MODELS_DIR = DATA_DIR / "models"
 INDICES_DIR = DATA_DIR / "indices"
 
 DB_PATH = DATA_DIR / "smr_pro.db"
+CODE_DICT_PATH = RAW_DIR / "materialCodesDictionary.csv"
 
 # Make sure all directories exist on import
 for _d in (DATA_DIR, RAW_DIR, PROCESSED_DIR, MODELS_DIR, INDICES_DIR):
@@ -56,11 +57,12 @@ SYMSPELL_DICT_PATH = MODELS_DIR / "symspell_dict.txt"
 BM25_INDEX_PATH = INDICES_DIR / "bm25_index.pkl"
 FAISS_INDEX_PATH = INDICES_DIR / "faiss.index"
 FAISS_ID_MAP_PATH = INDICES_DIR / "faiss_id_map.pkl"
+PTM_INDEX_PATH = INDICES_DIR / "ptm_index.pkl"
 
 # --- Training hyper-parameters ----------------------------------------------
 
 FP_SUPPORT_MIN = 0.03
-FP_CONFIDENCE_MIN = 0.6
+FP_CONFIDENCE_MIN = 0.4
 FP_LIFT_MIN = 1.0
 FP_MAX_LEN = 8
 

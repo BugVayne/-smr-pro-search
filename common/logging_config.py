@@ -13,8 +13,8 @@ def get_logger(name: str, level: int = logging.INFO) -> logging.Logger:
     h = logging.StreamHandler(sys.stdout)
     h.setFormatter(
         logging.Formatter(
-            "[%(asctime)s] %(levelname)s %(name)s: %(message)s",
-            datefmt="%H:%M:%S",
+            "[%(asctime)s] %(levelname)-5s %(name)s: %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
         )
     )
     logger.addHandler(h)

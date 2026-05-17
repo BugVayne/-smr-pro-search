@@ -40,6 +40,23 @@ RUSSIAN_STOPWORDS = {
 
 _TOKEN_RE = re.compile(r"[А-Яа-яЁёA-Za-z0-9-]+", re.UNICODE)
 
+# Dimension prefix normalisation: merge prefix and digits into one token.
+# Applied before tokenisation so "Ду 50" and "ду50" produce the same token.
+_DIM_PATTERNS = [
+    (re.compile(r'\bДу\s*(?=\d)', re.IGNORECASE),  'ду'),
+    (re.compile(r'\bДн\s*(?=\d)', re.IGNORECASE),  'дн'),
+    (re.compile(r'\bDN\s*(?=\d)', re.IGNORECASE),  'dn'),
+    (re.compile(r'\bD\s*(?=\d)',  re.IGNORECASE),   'd'),
+    (re.compile(r'(?<=\d)\s*мм\b', re.IGNORECASE), 'мм'),
+]
+
+
+def normalize_dimensions(text: str) -> str:
+    """Merge dimension prefix/suffix with adjacent number, removing any space."""
+    for pattern, repl in _DIM_PATTERNS:
+        text = pattern.sub(repl, text)
+    return text
+
 
 def tokenize(text: str) -> List[str]:
     return [t.lower() for t in _TOKEN_RE.findall(text)]
@@ -60,6 +77,7 @@ def lemmatize(text: str) -> List[str]:
     Domain stop words are kept if they are the only content word; this
     prevents queries like "монтаж" from becoming empty.
     """
+    text = normalize_dimensions(text)
     tokens = tokenize(text)
     lemmas = [lemmatize_token(t) for t in tokens]
     lemmas = [l for l in lemmas if l not in RUSSIAN_STOPWORDS]

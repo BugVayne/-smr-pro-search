@@ -52,16 +52,20 @@ class Ranker:
         """Hand-tuned linear combination – mirrors LTR weights.
 
         Heavy weight on RRF-style signals (f4, f5) and SBERT (f2), with a
-        smaller contribution from historical priors (f6, f7).
+        smaller contribution from historical priors (f6, f7) and PTM (f12).
+        f13 (numeric match) acts as a multiplier-like signal: 1.0 when no
+        numbers in query (neutral), <1.0 when number is absent from candidate.
         """
-        # Pad to expected length
-        f = list(f) + [0.0] * max(0, 11 - len(f))
+        # Pad to expected length (13 features)
+        f = list(f) + [1.0] * max(0, 13 - len(f))  # f13 defaults to 1.0 (neutral)
         return (
-            0.30 * f[1]   # f2 sbert
-            + 0.15 * f[0]   # f1 bm25 (raw scores can be large – kept small)
-            + 0.20 * f[3]   # f4 inv bm25 rank
-            + 0.20 * f[4]   # f5 inv sbert rank
-            + 0.05 * f[2]   # f3 overlap
-            + 0.05 * f[5]   # f6 prior
-            + 0.05 * f[6]   # f7 context
+            0.23 * f[1]    # f2  sbert
+            + 0.12 * f[0]  # f1  bm25
+            + 0.15 * f[3]  # f4  inv bm25 rank
+            + 0.15 * f[4]  # f5  inv sbert rank
+            + 0.15 * f[12] # f13 numeric match  ← new
+            + 0.08 * f[11] # f12 ptm score
+            + 0.05 * f[2]  # f3  overlap
+            + 0.04 * f[5]  # f6  prior
+            + 0.03 * f[6]  # f7  context
         )

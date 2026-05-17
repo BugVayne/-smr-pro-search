@@ -30,8 +30,22 @@ def health():
 def search():
     body = request.get_json(force=True)
     req = SearchRequest(**body)
-    log.info("search: %r", req.query)
+    log.info("━━━ SEARCH REQUEST ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    log.info("  query   : «%s»", req.query)
+    if req.context:
+        log.info("  context : %s", req.context)
     resp = run_pipeline(req)
+    t = resp.timings_ms
+    total = sum(t.values())
+    log.info("━━━ SEARCH RESULT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    log.info("  results : %d items, %d kits, %d ptm_groups, type=%s",
+             len(resp.items), len(resp.kits), len(resp.ptm_groups), resp.query_type)
+    log.info("  timings : pre=%.0fms ret=%.0fms rank=%.0fms post=%.0fms | total=%.0fms",
+             t.get("preprocess", 0), t.get("retrieve", 0),
+             t.get("rank", 0), t.get("postprocess", 0), total)
+    if resp.items:
+        top3 = ", ".join(f"{it.obosn}({it.score:.4f})" for it in resp.items[:3])
+        log.info("  top3    : %s", top3)
     return jsonify(resp.model_dump())
 
 

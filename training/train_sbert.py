@@ -14,9 +14,14 @@ from __future__ import annotations
 import random
 from typing import List
 
+import os
+
 from common.config import SBERT_BASE_MODEL, SBERT_MODEL_DIR
 from common.db import all_transactions, get_rascenki
+from common.gpu import get_device, gpu_batch_size
 from common.logging_config import get_logger
+
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 log = get_logger(__name__)
 
@@ -51,13 +56,20 @@ def _build_pairs(min_pairs: int = 5) -> List[tuple]:
     return pairs if len(pairs) >= min_pairs else []
 
 
-def train(epochs: int = 1, batch_size: int = 16) -> bool:
+def train(epochs: int = 1, batch_size: int = None) -> bool:
     try:
         from sentence_transformers import InputExample, SentenceTransformer, losses
         from torch.utils.data import DataLoader
     except ImportError:
         log.warning("sentence-transformers not installed – skipping SBERT fine-tune")
         return False
+
+    device = get_device()
+    if batch_size is None:
+        # RTX 3050 Ti (4 GB) fits ~8 with rubert-base + Adam optimizer state.
+        # Larger batches OOM. MultipleNegativesRankingLoss uses in-batch
+        # negatives so batch=8 still gives 7 negatives per anchor.
+        batch_size = gpu_batch_size(cpu_size=16, gpu_size=8)
 
     pairs = _build_pairs()
     if not pairs:
@@ -67,9 +79,9 @@ def train(epochs: int = 1, batch_size: int = 16) -> bool:
     examples = [InputExample(texts=[a, b]) for a, b in pairs]
     random.shuffle(examples)
 
-    log.info("Loading base model: %s", SBERT_BASE_MODEL)
+    log.info("Loading base model: %s on %s", SBERT_BASE_MODEL, device.upper())
     try:
-        model = SentenceTransformer(SBERT_BASE_MODEL)
+        model = SentenceTransformer(SBERT_BASE_MODEL, device=device)
     except Exception as exc:
         log.warning("Could not load base SBERT (%s) – skipping", exc)
         return False
@@ -77,12 +89,15 @@ def train(epochs: int = 1, batch_size: int = 16) -> bool:
     loader = DataLoader(examples, batch_size=batch_size, shuffle=True)
     loss = losses.MultipleNegativesRankingLoss(model)
 
-    log.info("Fine-tuning SBERT for %d epoch(s) on %d examples", epochs, len(examples))
+    use_amp = (device == "cuda")
+    log.info("Fine-tuning SBERT for %d epoch(s) on %d examples (batch=%d, amp=%s)",
+             epochs, len(examples), batch_size, use_amp)
     model.fit(
         train_objectives=[(loader, loss)],
         epochs=epochs,
         warmup_steps=max(1, len(loader) // 10),
-        show_progress_bar=False,
+        show_progress_bar=True,
+        use_amp=use_amp,
     )
     SBERT_MODEL_DIR.mkdir(parents=True, exist_ok=True)
     model.save(str(SBERT_MODEL_DIR))

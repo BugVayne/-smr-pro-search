@@ -33,6 +33,7 @@ from training import (
     train_catboost,
     train_fasttext,
     train_fp_growth,
+    train_query_classifier,
     train_sbert,
 )
 
@@ -90,14 +91,17 @@ def run(
     else:
         log.info("[5/7] Skipping SBERT fine-tune")
 
-    log.info("[6/7] Building BM25 + FAISS + SymSpell")
+    log.info("[6/8] Building BM25 + FAISS + SymSpell + PTM index")
     build_indices.build_all(skip_faiss=skip_faiss or skip_sbert)
 
+    log.info("[7/8] Training query-type classifier")
+    train_query_classifier.train()
+
     if not skip_catboost:
-        log.info("[7/7] Training CatBoost ranker")
+        log.info("[8/8] Training CatBoost ranker")
         train_catboost.train()
     else:
-        log.info("[7/7] Skipping CatBoost")
+        log.info("[8/8] Skipping CatBoost")
 
     log.info("Training pipeline finished.")
 

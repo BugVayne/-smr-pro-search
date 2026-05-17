@@ -92,9 +92,23 @@ def _iter_rates(src: sqlite3.Connection) -> Iterator[dict]:
     cur = src.execute(
         "SELECT Id, Code, Name, UnitsOfMeasurement, RateGroupId FROM Rates"
     )
-    for r in cur:
+    skipped_star = 0
+    all_codes: set[str] = set()
+
+    rows = cur.fetchall()
+    for r in rows:
+        all_codes.add(r["Code"])
+
+    for r in rows:
+        code: str = r["Code"]
+        # Skip starred duplicates (e.g. "А1-15-1*") when the base code exists.
+        # The * suffix means "with complicating conditions" — same work item,
+        # not a distinct rascenka. Keep it only if the base is absent.
+        if code.endswith("*") and code[:-1] in all_codes:
+            skipped_star += 1
+            continue
         yield {
-            "obosn": r["Code"],
+            "obosn": code,
             "naim": r["Name"],
             "tip": "100",
             "ed_izm": r["UnitsOfMeasurement"],
@@ -103,6 +117,10 @@ def _iter_rates(src: sqlite3.Connection) -> Iterator[dict]:
             "source_id": r["Id"],
         }
 
+    if skipped_star:
+        log.info("Skipped %d starred duplicate rates (* suffix with existing base)",
+                 skipped_star)
+
 
 def _iter_materials(src: sqlite3.Connection) -> Iterator[dict]:
     cur = src.execute(
@@ -110,9 +128,7 @@ def _iter_materials(src: sqlite3.Connection) -> Iterator[dict]:
         "FROM Materials"
     )
     for r in cur:
-        # Use FormattedCode as obosn when available – it's what users type;
-        # fall back to Code otherwise.
-        obosn = r["FormattedCode"] or r["Code"]
+        obosn = r["Code"] or r["FormattedCode"]
         yield {
             "obosn": obosn,
             "naim": r["Name"],

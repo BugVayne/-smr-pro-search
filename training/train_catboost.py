@@ -71,12 +71,19 @@ def train() -> bool:
     if not X:
         return False
 
-    log.info("Training CatBoost on %d examples", len(X))
+    try:
+        import torch
+        task_type = "GPU" if torch.cuda.is_available() else "CPU"
+    except ImportError:
+        task_type = "CPU"
+
+    log.info("Training CatBoost on %d examples (task_type=%s)", len(X), task_type)
     model = CatBoostRegressor(
         iterations=200,
         depth=4,
         learning_rate=0.1,
         loss_function="RMSE",
+        task_type=task_type,
         verbose=False,
         feature_names=FEATURE_NAMES,
     )
