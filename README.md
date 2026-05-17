@@ -153,19 +153,15 @@ make stop
 
 ## Технологии
 
-| Слой | Инструменты |
-|---|---|
-| Веб-фреймворк | Python 3.10+, Flask 3 |
-| Полнотекстовый поиск | rank-bm25 |
-| Семантический поиск | sentence-transformers (ruBERT), faiss-cpu |
-| Поиск по ПТМ | собственный инвертированный индекс |
-| Слияние результатов | RRF (Reciprocal Rank Fusion) |
-| Переранжирование | CatBoost (Learning to Rank) |
-| Ассоциативные правила | mlxtend FP-Growth |
-| NLP (русский язык) | Natasha, pymorphy3, symspellpy, gensim FastText |
-| Хранилище | SQLite (без внешних СУБД) |
-
----
+- **Python 3.10+**, Flask
+- **rank_bm25** – BM25 поиск (вместо Elasticsearch для простоты)
+- **sentence-transformers** – SBERT эмбеддинги
+- **faiss-cpu** – векторный индекс
+- **mlxtend** – FP-Growth ассоциативные правила
+- **catboost** – градиентный бустинг для LTR
+- **natasha**, **pymorphy3** – морфология русского языка
+- **symspellpy** – коррекция опечаток
+- **SQLite** – хранилище данных
 
 ## Пайплайн обучения
 
